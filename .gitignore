@@ -1,0 +1,49 @@
+# Environment files — NEVER commit secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# C++ build artifacts
+cpp-client/build/
+cpp-client/cmake-build-*/
+*.o
+*.a
+*.so
+*.exe
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# SSL certs
+nginx/ssl/*.pem
+nginx/ssl/*.crt
+nginx/ssl/*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.override.yml
