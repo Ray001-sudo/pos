@@ -3,6 +3,23 @@
 // =============================================================================
 // GLOBAL ERROR HANDLER
 // =============================================================================
+function redactPII(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Buffer.isBuffer(obj)) return '[BUFFER]';
+    const redacted = Array.isArray(obj) ? [] : {};
+    const sensitiveKeys = ['password', 'password_hash', 'pin', 'pin_hash', 'email', 'phone', 'authorization', 'x-signature'];
+    for (const key of Object.keys(obj)) {
+        if (sensitiveKeys.includes(key.toLowerCase())) {
+            redacted[key] = '[REDACTED]';
+        } else if (typeof obj[key] === 'object') {
+            redacted[key] = redactPII(obj[key]);
+        } else {
+            redacted[key] = obj[key];
+        }
+    }
+    return redacted;
+}
+
 function globalErrorHandler(logger) {
     return (err, req, res, next) => {
         const statusCode = err.statusCode || err.status || 500;
@@ -10,11 +27,12 @@ function globalErrorHandler(logger) {
 
         logger.error({
             message: err.message,
-            stack: err.stack,
             method: req.method,
             path: req.path,
             tenant_id: req.user?.tenant_id,
-            statusCode
+            statusCode,
+            body: redactPII(req.body),
+            headers: redactPII(req.headers)
         });
 
         // Never leak stack traces in production
@@ -55,28 +73,26 @@ const crypto = require('crypto');
 
 function verifyHmacSignature(req, res, next) {
     const signature = req.headers['x-signature'];
-    if (!signature) {
-        return res.status(400).json({ error: 'Missing X-Signature header' });
-    }
-
+    if (!signature) return res.status(400).json({ error: 'Missing X-Signature header' });
     const secret = process.env.SYNC_HMAC_SECRET;
-    if (!secret) {
-        return res.status(500).json({ error: 'Server misconfiguration' });
+    if (!secret) return res.status(500).json({ error: 'Server misconfiguration' });
+
+    if (!Buffer.isBuffer(req.body)) {
+        return res.status(400).json({ error: 'Raw body required for HMAC verification' });
     }
 
-    const body = JSON.stringify(req.body);
-    const expected = crypto
-        .createHmac('sha256', secret)
-        .update(body, 'utf8')
-        .digest('hex');
+    const expected = crypto.createHmac('sha256', secret).update(req.body).digest('hex');
+    const signatureBuffer = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
 
-    // Constant-time comparison prevents timing attacks
-    const signatureBuffer  = Buffer.from(signature, 'hex');
-    const expectedBuffer   = Buffer.from(expected,   'hex');
-
-    if (signatureBuffer.length !== expectedBuffer.length ||
-        !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
         return res.status(401).json({ error: 'Invalid request signature' });
+    }
+
+    try {
+        req.body = JSON.parse(req.body.toString('utf8'));
+    } catch (err) {
+        return res.status(400).json({ error: 'Invalid JSON body' });
     }
 
     next();

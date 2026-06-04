@@ -2,7 +2,7 @@
 
 const jwt = require('jsonwebtoken');
 const { createPrivateKey, createPublicKey } = require('crypto');
-const { redisClient } = require('../server');
+const { getRedisClient } = require('../server');
 
 // =============================================================================
 // JWT SERVICE — RS256 asymmetric signing
@@ -50,7 +50,7 @@ async function issueRefreshToken(userId, tenantId) {
     const key = `refresh:${tokenId}`;
 
     // Store refresh session in Redis with 30-day TTL
-    await redisClient.setEx(key, 30 * 24 * 3600, JSON.stringify({
+    await getRedisClient().setEx(key, 30 * 24 * 3600, JSON.stringify({
         user_id:   userId,
         tenant_id: tenantId,
         issued_at: Date.now()
@@ -74,7 +74,7 @@ async function verifyAccessToken(token) {
     }
 
     // Check revocation blacklist
-    const blacklisted = await redisClient.get(`blacklist:${decoded.jti}`);
+    const blacklisted = await getRedisClient().get(`blacklist:${decoded.jti}`);
     if (blacklisted) {
         throw Object.assign(new Error('Token has been revoked'), { statusCode: 401 });
     }
@@ -89,7 +89,7 @@ async function verifyAccessToken(token) {
 async function revokeAccessToken(decoded) {
     const remaining = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
     if (remaining > 0) {
-        await redisClient.setEx(`blacklist:${decoded.jti}`, remaining, '1');
+        await getRedisClient().setEx(`blacklist:${decoded.jti}`, remaining, '1');
     }
 }
 
@@ -101,7 +101,7 @@ async function revokeAccessToken(decoded) {
 async function revokeAllTenantSessions(tenantId) {
     // Set a tenant block flag (checked in verifyAccessToken)
     // TTL of 48 hours — long enough to cover any active access tokens
-    await redisClient.setEx(`tenant_blocked:${tenantId}`, 48 * 3600, '1');
+    await getRedisClient().setEx(`tenant_blocked:${tenantId}`, 48 * 3600, '1');
 }
 
 // =============================================================================
@@ -123,7 +123,7 @@ async function requireAuth(req, res, next) {
         const decoded = await verifyAccessToken(token);
 
         // Check tenant-level block (set during suspension)
-        const tenantBlocked = await redisClient.get(`tenant_blocked:${decoded.tenant_id}`);
+        const tenantBlocked = await getRedisClient().get(`tenant_blocked:${decoded.tenant_id}`);
         if (tenantBlocked) {
             return res.status(403).json({ error: 'Account suspended. Contact support.' });
         }
