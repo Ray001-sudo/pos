@@ -6,10 +6,10 @@ const { Pool } = require('pg');
 // PostgreSQL Connection Pool
 // =============================================================================
 const pool = new Pool({
-    host:               process.env.PG_HOST || 'localhost',
+    host:               process.env.PG_HOST,
     port:               parseInt(process.env.PG_PORT || '5432'),
-    database:           process.env.PG_DATABASE || 'pos_platform',
-    user:               process.env.PG_USER || 'pos_api',
+    database:           process.env.PG_DATABASE,
+    user:               process.env.PG_USER,
     password:           process.env.PG_PASSWORD,
     max:                parseInt(process.env.PG_POOL_MAX || '20'),
     idleTimeoutMillis:  30000,

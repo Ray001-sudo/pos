@@ -58,29 +58,11 @@ function requestLogger(logger) {
                 status:    res.statusCode,
                 duration:  `${Date.now() - start}ms`,
                 tenant_id: req.user?.tenant_id || 'unauthenticated',
-                ip:        req.ip
+                ip:        req.ip ? req.ip.replace(/\.\d+$/, '.0') : 'unknown'
             });
         });
         next();
     };
-}
-
-
-    const expected = crypto.createHmac('sha256', secret).update(req.body).digest('hex');
-    const signatureBuffer = Buffer.from(signature, 'hex');
-    const expectedBuffer = Buffer.from(expected, 'hex');
-
-    if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
-        return res.status(401).json({ error: 'Invalid request signature' });
-    }
-
-    try {
-        req.body = JSON.parse(req.body.toString('utf8'));
-    } catch (err) {
-        return res.status(400).json({ error: 'Invalid JSON body' });
-    }
-
-    next();
 }
 
 module.exports = { globalErrorHandler, requestLogger };

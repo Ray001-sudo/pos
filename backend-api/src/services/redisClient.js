@@ -10,7 +10,7 @@ const logger = winston.createLogger({
 });
 
 const redisClient = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: process.env.REDIS_URL,
     socket: { reconnectStrategy: (retries) => Math.min(retries * 100, 5000) }
 });
 
