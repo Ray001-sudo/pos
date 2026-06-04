@@ -108,7 +108,7 @@ const syncRouter = express.Router();
 
 // POST /api/v1/sync/heartbeat
 const { verifyHmacSignature: verifyHmac } = require('../middleware/hmac');
-syncRouter.post('/heartbeat', requireAuth, verifyHmac, async (req, res) => {
+syncRouter.post('/heartbeat', syncLimiter, requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
 
     const tenantResult = await tenantQuery(
