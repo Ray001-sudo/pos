@@ -188,18 +188,20 @@ syncRouter.post('/transactions', requireAuth, async (req, res) => {
         try {
             await tenantTransaction(async (client) => {
                 // Upsert transaction (idempotent — re-sent duplicates are ignored)
-                await client.query(
+                const txRes = await client.query(
                     `INSERT INTO sales_transactions
                         (receipt_id, tenant_id, terminal_id, cashier_id, subtotal, tax_total,
                          discount_total, grand_total, payment_method, sale_timestamp, is_voided, void_reason)
                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-                     ON CONFLICT (receipt_id) DO NOTHING`,
+                     ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_id`,
                     [
                         tx.receipt_id, tenant_id, tx.terminal_id, tx.cashier_id,
                         tx.subtotal, tx.tax_total, tx.discount_total, tx.grand_total,
                         tx.payment_method, tx.sale_timestamp, tx.is_voided, tx.void_reason || null
                     ]
                 );
+
+                if (txRes.rowCount === 0) return; // duplicate/idempotent
 
                 // Insert sale items
                 for (const item of tx.items) {
@@ -208,10 +210,18 @@ syncRouter.post('/transactions', requireAuth, async (req, res) => {
                          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
                         [uuidv4(), tx.receipt_id, tenant_id, item.product_id, item.quantity, item.unit_price, item.line_total]
                     );
-                    // Decrement stock
+
+                    const stockRes = await client.query(
+                        `SELECT stock_quantity FROM products WHERE product_id = $1 AND tenant_id = $2 FOR UPDATE`,
+                        [item.product_id, tenant_id]
+                    );
+                    
+                    if (stockRes.rowCount === 0 || stockRes.rows[0].stock_quantity < item.quantity) {
+                        throw new Error('INSUFFICIENT_STOCK');
+                    }
+
                     await client.query(
-                        `UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - $1)
-                         WHERE product_id = $2 AND tenant_id = $3`,
+                        `UPDATE products SET stock_quantity = stock_quantity - $1 WHERE product_id = $2 AND tenant_id = $3`,
                         [item.quantity, item.product_id, tenant_id]
                     );
                 }
@@ -219,6 +229,9 @@ syncRouter.post('/transactions', requireAuth, async (req, res) => {
 
             accepted.push(tx.receipt_id);
         } catch (err) {
+            if (err.message === 'INSUFFICIENT_STOCK') {
+                return res.status(400).json({ error: 'Insufficient stock for transaction' });
+            }
             rejected.push({ receipt_id: tx.receipt_id, reason: err.message });
         }
     }
