@@ -25,7 +25,7 @@ const transactionsRateLimiter = rateLimit({
 
 // GET /api/v1/license/check
 // Called by C++ client on every startup; returns account status and a signed handshake token
-licenseRouter.get('/check', requireAuth, async (req, res) => {
+licenseRouter.get('/check', transactionsRateLimiter, requireAuth, async (req, res) => {
     const { tenant_id } = req.user;
 
     const result = await tenantQuery(
