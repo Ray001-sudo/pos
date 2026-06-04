@@ -1,6 +1,6 @@
 'use strict';
 
-const { getRedisClient } = require('../server');
+const { getClient } = require('../services/redisClient');
 
 // =============================================================================
 // RATE LIMITER — Redis Sliding Window
@@ -24,7 +24,7 @@ function createRateLimiter({ windowSeconds = 60, maxRequests = 100, keyPrefix = 
 
         try {
             // Sliding window: remove entries older than the window, then add current timestamp
-            const pipe = getRedisClient().multi();
+            const pipe = getClient().multi();
             pipe.zRemRangeByScore(key, '-inf', windowStart.toString());
             pipe.zAdd(key, [{ score: now, value: `${now}-${Math.random()}` }]);
             pipe.zCard(key);

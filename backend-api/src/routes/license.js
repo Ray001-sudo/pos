@@ -6,7 +6,8 @@ const { z }   = require('zod');
 
 const { tenantQuery }  = require('../models/db');
 const { requireAuth }  = require('../middleware/auth');
-const { syncLimiter, verifyHmacSignature } = require('../middleware/rateLimiter');
+const { syncLimiter } = require('../middleware/rateLimiter');
+const { verifyHmacSignature } = require('../middleware/hmac');
 const { writeAuditLog } = require('../services/auditService');
 
 // =============================================================================
@@ -106,8 +107,8 @@ function generateHandshakeToken(tenantId) {
 const syncRouter = express.Router();
 
 // POST /api/v1/sync/heartbeat
-const { verifyHmacSignature: verifyHmac } = require('../middleware/errorHandler');
-syncRouter.post('/heartbeat', requireAuth, async (req, res) => {
+const { verifyHmacSignature: verifyHmac } = require('../middleware/hmac');
+syncRouter.post('/heartbeat', requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
 
     const tenantResult = await tenantQuery(
@@ -170,7 +171,7 @@ const transactionBatchSchema = z.object({
     })).max(50)  // batch cap per request
 });
 
-syncRouter.post('/transactions', requireAuth, async (req, res) => {
+syncRouter.post('/transactions', requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
     const parsed = transactionBatchSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -212,26 +213,20 @@ syncRouter.post('/transactions', requireAuth, async (req, res) => {
                     );
 
                     const stockRes = await client.query(
-                        `SELECT stock_quantity FROM products WHERE product_id = $1 AND tenant_id = $2 FOR UPDATE`,
-                        [item.product_id, tenant_id]
-                    );
-                    
-                    if (stockRes.rowCount === 0 || stockRes.rows[0].stock_quantity < item.quantity) {
-                        throw new Error('INSUFFICIENT_STOCK');
-                    }
-
-                    await client.query(
-                        `UPDATE products SET stock_quantity = stock_quantity - $1 WHERE product_id = $2 AND tenant_id = $3`,
+                        `UPDATE products SET stock_quantity = stock_quantity - $1 
+                         WHERE product_id = $2 AND tenant_id = $3 AND stock_quantity >= $1 
+                         RETURNING stock_quantity`,
                         [item.quantity, item.product_id, tenant_id]
                     );
+                    
+                    if (stockRes.rowCount === 0) {
+                        throw new Error('INSUFFICIENT_STOCK');
+                    }
                 }
             }, tenant_id);
 
             accepted.push(tx.receipt_id);
         } catch (err) {
-            if (err.message === 'INSUFFICIENT_STOCK') {
-                return res.status(400).json({ error: 'Insufficient stock for transaction' });
-            }
             rejected.push({ receipt_id: tx.receipt_id, reason: err.message });
         }
     }
