@@ -3,6 +3,7 @@
 const express = require('express');
 const crypto  = require('crypto');
 const { z }   = require('zod');
+const rateLimit = require('express-rate-limit');
 
 const { tenantQuery }  = require('../models/db');
 const { requireAuth }  = require('../middleware/auth');
@@ -14,6 +15,13 @@ const { writeAuditLog } = require('../services/auditService');
 // LICENSE ROUTES
 // =============================================================================
 const licenseRouter = express.Router();
+
+const transactionsRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 120,                 // cap bulk sync requests per window per IP
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 // GET /api/v1/license/check
 // Called by C++ client on every startup; returns account status and a signed handshake token
@@ -172,7 +180,7 @@ const transactionBatchSchema = z.object({
     })).max(50)  // batch cap per request
 });
 
-syncRouter.post('/transactions', syncLimiter, requireAuth, verifyHmac, async (req, res) => {
+syncRouter.post('/transactions', transactionsRateLimiter, syncLimiter, requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
     const parsed = transactionBatchSchema.safeParse(req.body);
     if (!parsed.success) {
