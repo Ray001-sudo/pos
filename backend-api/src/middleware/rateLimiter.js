@@ -46,8 +46,11 @@ function createRateLimiter({ windowSeconds = 60, maxRequests = 100, keyPrefix = 
 
             next();
         } catch (err) {
-            // On Redis failure, fail open (don't block legitimate traffic)
             console.error('Rate limiter Redis error:', err);
+            if (req.path.startsWith('/api/v1/auth') || req.path.startsWith('/api/v1/sync') || req.path.startsWith('/auth') || req.path.startsWith('/sync')) {
+                return res.status(503).json({ error: 'Service Unavailable: Rate limiter is down' });
+            }
+            // For non-sensitive routes, fail open
             next();
         }
     };

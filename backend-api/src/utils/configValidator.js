@@ -2,7 +2,8 @@
 function validateConfig() {
     const required = [
         'HANDSHAKE_HMAC_SECRET', 'SYNC_HMAC_SECRET',
-        'PG_HOST', 'PG_USER', 'PG_PASSWORD', 'REDIS_URL', 'ADMIN_DASHBOARD_ORIGIN'
+        'PG_HOST', 'PG_USER', 'PG_PASSWORD', 'REDIS_URL', 'ADMIN_DASHBOARD_ORIGIN',
+        'MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET'
     ];
     const missing = required.filter(key => !process.env[key]);
     if (missing.length > 0) {

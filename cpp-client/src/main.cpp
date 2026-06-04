@@ -232,6 +232,10 @@ std::string HardwareFingerprint::generate() {
 #include <iostream>
 #include <memory>
 #include <fstream>
+#include <GLFW/glfw3.h>
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 // Embedded local schema SQL (compiled in from file at build time via CMake)
 extern const char* LOCAL_SCHEMA_SQL;
@@ -321,9 +325,37 @@ int main(int argc, char** argv) {
         // 8. Run UI loop (Dear ImGui — placeholder for full UI implementation)
         // -------------------------------------------------------------------------
         spdlog::info("Starting UI loop (Dear ImGui)");
-        // TODO: Initialize GLFW + OpenGL + ImGui context here
+        
+        if (!glfwInit()) {
+            spdlog::critical("Failed to initialize GLFW");
+            return 1;
+        }
+
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        GLFWwindow* window = glfwCreateWindow(1280, 720, "POS Platform", NULL, NULL);
+        if (window == NULL) {
+            spdlog::critical("Failed to create GLFW window");
+            glfwTerminate();
+            return 1;
+        }
+        glfwMakeContextCurrent(window);
+        glfwSwapInterval(1); // Enable vsync
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplGlfw_InitForOpenGL(window, true);
+        ImGui_ImplOpenGL3_Init("#version 330");
+
         // ui::MainWindow mainWindow(*db, *checkoutModule, *syncEngine, *timeBomb);
-        // mainWindow.run();  // blocks until window is closed
+        // mainWindow.run(window); // Blocks until window is closed
 
         // For demonstration: run one sync cycle and exit
         syncEngine->triggerImmediateSync();

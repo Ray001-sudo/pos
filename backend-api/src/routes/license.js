@@ -223,7 +223,7 @@ syncRouter.post('/transactions', transactionsRateLimiter, syncLimiter, requireAu
                 for (const item of tx.items) {
                     await client.query(
                         `INSERT INTO sale_items (item_id, receipt_id, tenant_id, product_id, quantity, unit_price, line_total)
-                         VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+                         VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (item_id) DO NOTHING`,
                         [uuidv4(), tx.receipt_id, tenant_id, item.product_id, item.quantity, item.unit_price, item.line_total]
                     );
 
