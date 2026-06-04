@@ -108,6 +108,7 @@ const syncRouter = express.Router();
 
 // POST /api/v1/sync/heartbeat
 const { verifyHmacSignature: verifyHmac } = require('../middleware/hmac');
+// Keep limiter first so expensive auth/db work is throttled at route entry.
 syncRouter.post('/heartbeat', syncLimiter, requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
 
