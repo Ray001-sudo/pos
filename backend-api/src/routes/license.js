@@ -171,7 +171,7 @@ const transactionBatchSchema = z.object({
     })).max(50)  // batch cap per request
 });
 
-syncRouter.post('/transactions', requireAuth, verifyHmac, async (req, res) => {
+syncRouter.post('/transactions', requireAuth, verifyHmac, syncLimiter, async (req, res) => {
     const { tenant_id } = req.user;
     const parsed = transactionBatchSchema.safeParse(req.body);
     if (!parsed.success) {
