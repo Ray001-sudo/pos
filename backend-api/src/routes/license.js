@@ -113,11 +113,17 @@ function generateHandshakeToken(tenantId) {
 // SYNC ROUTES
 // =============================================================================
 const syncRouter = express.Router();
+const heartbeatLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // cap heartbeat burst per IP
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 // POST /api/v1/sync/heartbeat
 const { verifyHmacSignature: verifyHmac } = require('../middleware/hmac');
 // Keep limiter first so expensive auth/db work is throttled at route entry.
-syncRouter.post('/heartbeat', syncLimiter, requireAuth, verifyHmac, async (req, res) => {
+syncRouter.post('/heartbeat', heartbeatLimiter, syncLimiter, requireAuth, verifyHmac, async (req, res) => {
     const { tenant_id } = req.user;
 
     const tenantResult = await tenantQuery(
