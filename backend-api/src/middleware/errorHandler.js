@@ -65,21 +65,6 @@ function requestLogger(logger) {
     };
 }
 
-// =============================================================================
-// HMAC REQUEST SIGNATURE VERIFIER
-// Used on sync endpoints to verify C++ client payload integrity
-// =============================================================================
-const crypto = require('crypto');
-
-function verifyHmacSignature(req, res, next) {
-    const signature = req.headers['x-signature'];
-    if (!signature) return res.status(400).json({ error: 'Missing X-Signature header' });
-    const secret = process.env.SYNC_HMAC_SECRET;
-    if (!secret) return res.status(500).json({ error: 'Server misconfiguration' });
-
-    if (!Buffer.isBuffer(req.body)) {
-        return res.status(400).json({ error: 'Raw body required for HMAC verification' });
-    }
 
     const expected = crypto.createHmac('sha256', secret).update(req.body).digest('hex');
     const signatureBuffer = Buffer.from(signature, 'hex');
@@ -98,4 +83,4 @@ function verifyHmacSignature(req, res, next) {
     next();
 }
 
-module.exports = { globalErrorHandler, requestLogger, verifyHmacSignature };
+module.exports = { globalErrorHandler, requestLogger };

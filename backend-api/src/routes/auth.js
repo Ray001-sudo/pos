@@ -13,7 +13,7 @@ const {
 } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { writeAuditLog } = require('../services/auditService');
-const { getRedisClient } = require('../server');
+const { getClient } = require('../services/redisClient');
 
 const router = express.Router();
 
@@ -157,7 +157,7 @@ router.post('/refresh', async (req, res) => {
     }
 
     // Look up refresh session in Redis
-    const sessionData = await getRedisClient().get(`refresh:${refreshToken}`);
+    const sessionData = await getClient().get(`refresh:${refreshToken}`);
     if (!sessionData) {
         return res.status(401).json({ error: 'Refresh token expired or invalid' });
     }
@@ -175,7 +175,7 @@ router.post('/refresh', async (req, res) => {
 
     const user = userResult.rows[0];
     if (!user || !user.is_active) {
-        await getRedisClient().del(`refresh:${refreshToken}`);
+        await getClient().del(`refresh:${refreshToken}`);
         return res.status(401).json({ error: 'User account inactive' });
     }
 
@@ -209,7 +209,7 @@ router.post('/logout', requireAuth, async (req, res) => {
     // Delete refresh token from Redis
     const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
     if (refreshToken) {
-        await getRedisClient().del(`refresh:${refreshToken}`);
+        await getClient().del(`refresh:${refreshToken}`);
     }
 
     res.clearCookie(REFRESH_TOKEN_COOKIE);

@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
-const { createClient } = require('redis');
+const redisService = require('./services/redisClient');
 const winston = require('winston');
 
 const { pool, testConnection } = require('./models/db');
@@ -32,40 +32,6 @@ validateConfig();
 const { requestLogger } = require('./middleware/requestLogger');
 const billingJob = require('./jobs/billingAutomation');
 
-// =============================================================================
-// LOGGER
-// =============================================================================
-const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true }),
-        winston.format.json()
-    ),
-    transports: [
-        new winston.transports.Console(),
-        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'logs/combined.log' })
-    ]
-});
-
-// =============================================================================
-// REDIS CLIENT (singleton, shared via module)
-// =============================================================================
-const redisClient = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
-    socket: { reconnectStrategy: (retries) => Math.min(retries * 100, 5000) }
-});
-
-redisClient.on('error', (err) => logger.error('Redis error:', err));
-redisClient.on('connect', () => logger.info('Redis connected'));
-
-module.exports.getRedisClient = () => {
-    if (!redisClient.isReady) {
-        logger.error('Attempted to use Redis before connection is ready');
-        throw new Error('Redis not connected');
-    }
-    return redisClient;
 };
 module.exports.logger = logger;
 
@@ -130,7 +96,7 @@ app.use('/api/v1/integrations', integrationsRoutes);
 // Health check endpoint
 app.get('/health', async (req, res) => {
     const dbOk = await testConnection().catch(() => false);
-    const redisOk = redisClient.isReady;
+    const redisOk = redisService.isReady();
     const status = dbOk && redisOk ? 200 : 503;
     res.status(status).json({ db: dbOk, redis: redisOk, uptime: process.uptime() });
 });
@@ -146,7 +112,7 @@ app.use(globalErrorHandler(logger));
 // =============================================================================
 async function start() {
     try {
-        await redisClient.connect();
+        await redisService.connect();
         await testConnection();
         logger.info('Database connection verified');
 
